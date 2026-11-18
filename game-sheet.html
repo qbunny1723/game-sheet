@@ -761,12 +761,13 @@ async function submitAll() {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'save', game: data['遊戲名稱'], pin: pin,
-        base: serverVersion, flat: data, archive: collectData()
+        base: serverVersion, gid: serverGid, flat: data, archive: collectData()
       })
     });
     const r = await res.json();
     if (!r.ok) throw new Error(r.error || '伺服器回傳錯誤');
     serverVersion = r.version;
+    serverGid = r.gid || serverGid;
     const t = new Date();
     setMsg('✓ 已送出　' + t.getHours().toString().padStart(2,'0') + ':' + t.getMinutes().toString().padStart(2,'0') + '。下次可用「載入上次送出的內容」繼續填。用公用電腦的話，離開前請按「清除所有資料」。', 'ok');
   } catch (e) {
@@ -777,6 +778,7 @@ async function submitAll() {
 }
 
 let serverVersion = '';
+let serverGid = '';
 
 async function loadFromServer() {
   const msg = document.getElementById('load-msg');
@@ -800,12 +802,14 @@ async function loadFromServer() {
     if (!r.ok) throw new Error(r.error || '伺服器回傳錯誤');
     if (!r.found) {
       serverVersion = '';
-      setMsg('這組還沒有送出過內容，直接開始填寫就可以。', 'ok');
+      serverGid = '';
+      setMsg('這組還沒有送出過內容，直接開始填寫就可以。如果你們明明送過，請檢查遊戲名稱和暗號有沒有打錯。', 'ok');
     } else {
       serverVersion = r.version;
+      serverGid = r.gid || '';
       applyData(r.archive || {}, true);
       saveAll();
-      setMsg('✓ 已載入上次送出的內容。你這次已經打的字不會被蓋掉。', 'ok');
+      setMsg('✓ 已載入上次送出的內容。你這次已經打的字不會被蓋掉。想換暗號的話，直接改上面的「組別暗號」，再按送出就會更新。', 'ok');
     }
   } catch (e) {
     setMsg('載入失敗：' + e.message, 'err');
@@ -817,6 +821,7 @@ async function loadFromServer() {
 function clearData() {
   if (!confirm('確定要清除所有填寫內容嗎？組別代碼會保留，此操作無法復原。')) return;
   localStorage.removeItem(STORAGE_KEY);
+  serverVersion = ''; serverGid = '';
   document.querySelectorAll('.info-field input').forEach(el=>el.value='');
   document.querySelectorAll('textarea').forEach(el=>{el.value='';el.dispatchEvent(new Event('input'));});
   document.querySelectorAll('.member-table input').forEach(el=>el.value='');
