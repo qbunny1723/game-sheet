@@ -144,10 +144,14 @@
   .btn-danger { color: #A32D2D; border-color: rgba(163,45,45,0.3); }
   .btn-danger:hover { background: #FCEBEB; }
   .btn:disabled { opacity: 0.55; cursor: wait; }
+  .load-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: -0.5rem 0 2rem; }
+  .load-msg { font-size: 12px; color: var(--text3); line-height: 1.6; flex: 1; min-width: 200px; }
+  .load-msg.ok { color: #0C447C; }
+  .load-msg.err { color: #A32D2D; }
   .submit-msg { margin-top: 12px; font-size: 13px; line-height: 1.7; text-align: right; min-height: 20px; }
   .submit-msg.ok { color: #0C447C; }
   .submit-msg.err { color: #A32D2D; }
-  @media print { .submit-msg { display: none; } }
+  @media print { .submit-msg, .load-bar { display: none; } }
 
   @media print {
     @page { size: A4; margin: 18mm 16mm; }
@@ -339,7 +343,7 @@
 
   <div class="info-grid">
     <div class="info-field">
-      <label>組別名稱</label>
+      <label>組別名稱（給老師看）</label>
       <input type="text" id="info-0" placeholder="第 ___ 組">
     </div>
     <div class="info-field">
@@ -347,13 +351,25 @@
       <input type="text" id="info-1" placeholder="填寫全組成員姓名">
     </div>
     <div class="info-field">
-      <label>遊戲名稱</label>
+      <label>遊戲名稱（載入用，每次要寫一樣）</label>
       <input type="text" id="info-2" placeholder="你們設計的桌遊名稱">
     </div>
     <div class="info-field">
       <label>遊戲類型</label>
       <input type="text" id="info-3" placeholder="策略 / 卡牌 / 骰子 / 其他…">
     </div>
+    <div class="info-field">
+      <label>班級（給老師看）</label>
+      <input type="text" id="info-4" placeholder="例如：週二班">
+    </div>
+    <div class="info-field">
+      <label>組別暗號（自己訂，之後載入要用）</label>
+      <input type="text" id="info-5" placeholder="例如：1234，請記起來">
+    </div>
+  </div>
+  <div class="load-bar">
+    <button class="btn" id="load-btn" onclick="loadFromServer()">載入上次送出的內容</button>
+    <span class="load-msg" id="load-msg">在公用電腦開啟時：先填「遊戲名稱」和「組別暗號」，再按這顆按鈕。</span>
   </div>
 
   <div id="weeks-container"></div>
@@ -655,14 +671,26 @@ function loadAll() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
-    const d = JSON.parse(raw);
-    if (d.info) Object.entries(d.info).forEach(([k,v]) => { const el = document.getElementById(k); if(el) el.value=v; });
-    if (d.qa) Object.entries(d.qa).forEach(([k,v]) => { const [wi,qi]=k.split('_'); const el=document.querySelector(`textarea[data-wi="${wi}"][data-qi="${qi}"]`); if(el){el.value=v;el.dispatchEvent(new Event('input'));} });
-    if (d.ai) Object.entries(d.ai).forEach(([k,v]) => { const parts=k.split('_'); const el=document.querySelector(`textarea[data-wi="${parts[0]}"][data-ai="${parts[1]}"]`); if(el) el.value=v; });
-    if (d.code) Object.entries(d.code).forEach(([k,v]) => { const [wi,cn]=k.split('_'); const el=document.querySelector(`textarea[data-wi="${wi}"][data-code="${cn}"]`); if(el){el.value=v;el.dispatchEvent(new Event('input'));} });
-    if (d.csn) Object.entries(d.csn).forEach(([k,v]) => { const [wi,n]=k.split('_'); const el=document.querySelector(`input[data-wi="${wi}"][data-csn="${n}"]`); if(el) el.value=v; });
-    if (d.cse) Object.entries(d.cse).forEach(([k,v]) => { const [wi,n]=k.split('_'); const el=document.querySelector(`textarea[data-wi="${wi}"][data-cse="${n}"]`); if(el) el.value=v; });
-    if (d.member) Object.entries(d.member).forEach(([k,v]) => { const [mw,mi,mc]=k.split('_'); const el=document.querySelector(`input[data-mw="${mw}"][data-mi="${mi}"][data-mc="${mc}"]`); if(el) el.value=v; });
+    applyData(JSON.parse(raw), false);
+  } catch(e) {}
+}
+
+// 把資料填回畫面。fillEmptyOnly=true 時，只填目前還是空白的欄位，不會蓋掉學生已經打的字
+function applyData(d, fillEmptyOnly) {
+  try {
+    const put = (el, v, fire) => {
+      if (!el || v === undefined || v === null) return;
+      if (fillEmptyOnly && el.value.trim() !== '') return;
+      el.value = v;
+      if (fire) el.dispatchEvent(new Event('input'));
+    };
+    if (d.info) Object.entries(d.info).forEach(([k,v]) => put(document.getElementById(k), v));
+    if (d.qa) Object.entries(d.qa).forEach(([k,v]) => { const [wi,qi]=k.split('_'); put(document.querySelector(`textarea[data-wi="${wi}"][data-qi="${qi}"]`), v, true); });
+    if (d.ai) Object.entries(d.ai).forEach(([k,v]) => { const parts=k.split('_'); put(document.querySelector(`textarea[data-wi="${parts[0]}"][data-ai="${parts[1]}"]`), v); });
+    if (d.code) Object.entries(d.code).forEach(([k,v]) => { const [wi,cn]=k.split('_'); put(document.querySelector(`textarea[data-wi="${wi}"][data-code="${cn}"]`), v, true); });
+    if (d.csn) Object.entries(d.csn).forEach(([k,v]) => { const [wi,n]=k.split('_'); put(document.querySelector(`input[data-wi="${wi}"][data-csn="${n}"]`), v); });
+    if (d.cse) Object.entries(d.cse).forEach(([k,v]) => { const [wi,n]=k.split('_'); put(document.querySelector(`textarea[data-wi="${wi}"][data-cse="${n}"]`), v); });
+    if (d.member) Object.entries(d.member).forEach(([k,v]) => { const [mw,mi,mc]=k.split('_'); put(document.querySelector(`input[data-mw="${mw}"][data-mi="${mi}"][data-mc="${mc}"]`), v); });
     updateGroupId();
     updateSummaryTable();
   } catch(e) {}
@@ -672,6 +700,8 @@ function loadAll() {
 function buildSubmission() {
   const val = (sel) => { const el = document.querySelector(sel); return el ? el.value.trim() : ''; };
   const out = {
+    '班級': val('#info-4'),
+    '組別暗號': val('#info-5'),
     '組別名稱': val('#info-0'),
     '組員姓名': val('#info-1'),
     '遊戲名稱': val('#info-2'),
@@ -712,12 +742,14 @@ async function submitAll() {
 
   if (!SUBMIT_URL) { setMsg('老師尚未設定收件網址，請先改用「列印 / 存成 PDF」繳交。', 'err'); return; }
   const data = buildSubmission();
-  if (!data['組別名稱']) {
-    setMsg('請先在最上方填寫「組別名稱」，老師才知道是哪一組。', 'err');
-    document.getElementById('info-0').focus();
+  const pin = document.getElementById('info-5').value.trim();
+  const need = [['遊戲名稱', 'info-2', data['遊戲名稱']], ['組別暗號', 'info-5', pin]].find(x => !x[2]);
+  if (need) {
+    setMsg('請先在最上方填寫「' + need[0] + '」，系統靠它認出你們這一組，之後也才能載入。', 'err');
+    document.getElementById(need[1]).focus();
     return;
   }
-  if (!confirm('確定要送出「' + data['組別名稱'] + '」目前的內容嗎？\n之後可以再送出，同一組會覆蓋舊的內容。')) return;
+  if (!confirm('確定要送出遊戲「' + data['遊戲名稱'] + '」目前的內容嗎？\n之後可以再送出，同一組再次送出會更新舊的內容。')) return;
 
   btn.disabled = true;
   setMsg('送出中…請稍候，不要關閉網頁');
@@ -727,14 +759,56 @@ async function submitAll() {
     const res = await fetch(SUBMIT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(data)
+      body: JSON.stringify({
+        action: 'save', game: data['遊戲名稱'], pin: pin,
+        base: serverVersion, flat: data, archive: collectData()
+      })
     });
     const r = await res.json();
     if (!r.ok) throw new Error(r.error || '伺服器回傳錯誤');
+    serverVersion = r.version;
     const t = new Date();
-    setMsg('✓ 已送出　' + t.getHours().toString().padStart(2,'0') + ':' + t.getMinutes().toString().padStart(2,'0') + '（可再次送出更新內容）', 'ok');
+    setMsg('✓ 已送出　' + t.getHours().toString().padStart(2,'0') + ':' + t.getMinutes().toString().padStart(2,'0') + '。下次可用「載入上次送出的內容」繼續填。用公用電腦的話，離開前請按「清除所有資料」。', 'ok');
   } catch (e) {
     setMsg('送出失敗：' + e.message + '。請確認網路後再按一次；若仍失敗，請先「列印 / 存成 PDF」備份並告知老師。', 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+let serverVersion = '';
+
+async function loadFromServer() {
+  const msg = document.getElementById('load-msg');
+  const btn = document.getElementById('load-btn');
+  const setMsg = (t, c) => { msg.textContent = t; msg.className = 'load-msg ' + (c || ''); };
+  const game = document.getElementById('info-2').value.trim();
+  const pin = document.getElementById('info-5').value.trim();
+
+  if (!SUBMIT_URL) { setMsg('老師尚未設定收件網址，無法載入。', 'err'); return; }
+  if (!game || !pin) { setMsg('請先填寫上面的「遊戲名稱」和「組別暗號」。', 'err'); return; }
+
+  btn.disabled = true;
+  setMsg('載入中…請稍候');
+  try {
+    const res = await fetch(SUBMIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'load', game: game, pin: pin })
+    });
+    const r = await res.json();
+    if (!r.ok) throw new Error(r.error || '伺服器回傳錯誤');
+    if (!r.found) {
+      serverVersion = '';
+      setMsg('這組還沒有送出過內容，直接開始填寫就可以。', 'ok');
+    } else {
+      serverVersion = r.version;
+      applyData(r.archive || {}, true);
+      saveAll();
+      setMsg('✓ 已載入上次送出的內容。你這次已經打的字不會被蓋掉。', 'ok');
+    }
+  } catch (e) {
+    setMsg('載入失敗：' + e.message, 'err');
   } finally {
     btn.disabled = false;
   }
